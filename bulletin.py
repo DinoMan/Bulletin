@@ -21,7 +21,7 @@ class Graph:
         self.labels = labels
 
     def _Post(self, board, id):
-        if self.x.size == 0:
+        if self.x.size <= 1:
             return
 
         board.line(Y=self.y,
@@ -70,8 +70,8 @@ class Bulletin():
     def CreateImage(self, image, id):
         self.Posts[id] = Image(image)
 
-    def CreateGraph(self, id, labels):
-        self.Posts[id] = Graph(labels)
+    def CreateGraph(self, id, labels, axis_x = None, axis_y = None):
+        self.Posts[id] = Graph(labels, axis_x, axis_y)
         return self.Posts[id]
 
     def Post(self):
