@@ -10,39 +10,71 @@ import os
 
 
 class Scatter:
-    def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=30, iterations=10000):
-        self.datapoints = datapoints
+    def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=30, iterations=10000,
+                 filter_name=None):
         self.no_points = datapoints.shape[0]
+        self.label_mapping = {}
         self.labels = labels
+        self.names = None
+        self.filter_name = filter_name
+
+        self.ChangeLabelling(labels)
+
         self.sequence_coloring = sequence_coloring
         if t_sne:
-            self.TSNE = TSNE(n_components=2, perplexity=perplexity, n_iter=iterations)
+            TSNE_Mapper = TSNE(n_components=2, perplexity=perplexity, n_iter=iterations)
+            self.datapoints = TSNE_Mapper.fit_transform(datapoints)
         else:
-            self.TSNE = None
+            self.datapoints = datapoints
+
+    def ChangeLabelling(self, labels, filter_name=None):
+        self.label_mapping = {}
+        self.labels = labels
+        self.names = None
+        self.filter_name = filter_name
+
+        if (labels is None) or (isinstance(labels[0], (int, long)) and (1 in labels)):
+            return
+
+        no_entries = 1
+        for name in labels:
+            if name not in self.label_mapping:
+                self.label_mapping[name] = no_entries
+                no_entries += 1
+
+        self.labels = map(self.label_mapping.get, self.labels)
+        self.names = sorted(self.label_mapping, key=self.label_mapping.__getitem__)
 
     def _Post(self, board, id):
-        if self.TSNE is None:
-            mapped_datapoints = self.datapoints
-        else:
-            if self.datapoints.size <= 2:
-                return
-            mapped_datapoints = self.TSNE.fit_transform(self.datapoints)
-
-        options = {'title': id,
-                   'markersize': 10}
+        win_name = id
+        if self.filter_name is not None:
+            win_name += "Filtered by: " + self.filter_name
 
         if self.labels is None:
             if self.sequence_coloring:
                 colors = 255 * (cm.coolwarm(np.arange(0, 1, step=1.0 / self.no_points))[:, :3])
-                options.update({'markercolor': colors.astype(int)})
-
-            board.scatter(X=mapped_datapoints,
-                          opts=options, win=id)
+            board.scatter(X=self.datapoints,
+                          opts=dict(title=id,
+                                    markercolor=colors.astype(int),
+                                    markersize=5,
+                                    ),
+                          win=win_name)
         else:
-            board.scatter(X=mapped_datapoints,
-                          Y=self.labels,
-                          opts=options,
-                          win=id)
+            if self.names is not None:
+                board.scatter(X=self.datapoints,
+                              Y=self.labels,
+                              opts=dict(title=win_name,
+                                        legend=self.names,
+                                        markersize=5,
+                                        ),
+                              win=win_name)
+            else:
+                board.scatter(X=self.datapoints,
+                              Y=self.labels,
+                              opts=dict(title=win_name,
+                                        markersize=5,
+                                        ),
+                              win=win_name)
 
 
 class Histogram:
