@@ -7,6 +7,7 @@ import matplotlib.cm as cm
 import imageio
 import menpo
 import os
+import tempfile
 
 
 class Scatter:
@@ -221,6 +222,7 @@ class Video:
         if video.size == 0:
             self.video = []
         else:
+            self.video = []
             self.Load(video)
 
     def Clear(self):
@@ -239,10 +241,12 @@ class Video:
         if len(self.video) < 1:
             return
 
-            # TODO Video doesn't work ATM (Could just be the lab computer has issues with ffmpeg though)
-            # board.video(np.stack(self.video), win=id)
+        temp_file = next(tempfile._get_candidate_names())
+        self.Save("/tmp", temp_file, fps=25)
+        full_path = "/tmp/" + temp_file + '.mp4'
+        board.video(videofile=full_path, win=id)
 
-    def Save(self, path, name, fps=15, gif=False):
+    def Save(self, path, name, fps=15, gif=False, extension=".mp4"):
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -254,12 +258,12 @@ class Video:
         else:
             menpo.image.Image
             menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
-                                  path + '/' + name + '.mp4', fps=fps, overwrite=True)
+                                  path + '/' + name + extension, fps=fps, overwrite=True)
 
 
 class Bulletin():
-    def __init__(self, save_path='.', env='main'):
-        self.vis = visdom.Visdom(env=env)
+    def __init__(self, server='http://localhost', save_path='.', env='main'):
+        self.vis = visdom.Visdom(env=env, server=server)
         self.Posts = {}
         self.save_path = save_path
 
