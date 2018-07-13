@@ -8,6 +8,16 @@ import imageio
 import menpo
 import os
 import tempfile
+import html_table
+import scipy.io.wavfile as wav
+from subprocess import call
+
+
+def filify(string):
+    filename = string.replace(" ", "_")
+    filename = filename.replace(":", "-")
+    filename = filename.replace("-_", "-")
+    return filename
 
 
 class Scatter:
@@ -77,6 +87,9 @@ class Scatter:
                                         ),
                               win=win_name)
 
+    def Save(self, path, name):
+        pass
+
 
 class Histogram:
     def __init__(self, x, numbins=20, axis_x=None, axis_y=None):
@@ -106,7 +119,7 @@ class Histogram:
 
     def Save(self, path, name):
         bin_size = (self.x.max() - self.x.min()) / self.numbins
-        with open(path + "/" + name + '.csv', 'wb') as csvfile:
+        with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + id)
             bin_location = self.x.min()
@@ -184,7 +197,7 @@ class Graph:
         self.y_batch = np.array([])
 
     def Save(self, path, name):
-        with open(path + "/" + name + '.csv', 'wb') as csvfile:
+        with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
             for csv_line in range(len(self.x)):
@@ -217,20 +230,70 @@ class Image:
         scipy.misc.imsave(path + '/' + name + '.jpg', np.rollaxis(self.img, 0, 3))
 
 
+class Table:
+    def __init__(self, headers, table_data=[]):
+        self.headers = headers
+        self.table = table_data
+
+    def Load(self, table_data):
+        self.table = table_data
+
+    def Clear(self):
+        self.table.clear()
+
+    def AddRow(self, row):
+        if not self.table:
+            self.table = [row]
+        else:
+            self.table.append(row)
+
+    def _Post(self, board, id):
+        htmlcode = html_table.table(self.table, header_row=self.headers, style="width:100%")
+        board.text(htmlcode, win=id)
+
+    def Save(self):
+        with open(path + "/" + name + '.csv', 'w') as csvfile:
+            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer.writerow(self.headers)
+            for csv_line in self.table:
+                line_writer.writerow(csv_line)
+        pass
+
+
+class Audio():
+    def __init__(self, audio=np.array([]), rate=50000):
+        self.audio = audio
+        self.rate = rate
+
+    def _Post(self, board, id):
+        temp_file = filify(board.env) + "_" + filify(id)
+        self.Save("/tmp", temp_file)
+        full_path = "/tmp/" + temp_file + '.wav'
+        opts = dict(sample_frequency=self.rate)
+        board.audio(audiofile=full_path, win=id, opts=opts)
+
+    def Save(self, path, name):
+        wav.write(path + '/' + name + ".wav", self.rate, self.audio)
+
+
 class Video:
-    def __init__(self, video=np.array([])):
+    def __init__(self, video=np.array([]), fps=25, audio=None, rate=50000):
         if video.size == 0:
             self.video = []
         else:
             self.video = []
             self.Load(video)
 
+        self.fps = fps
+        self.audio = audio
+        self.rate = rate
+
     def Clear(self):
         self.video = []
 
     def Load(self, video):
-        video[video > 1] = 1.0
-        video[video < 0] = 0.0
+        video[video > 1.0] = 1.0
+        video[video < 0.0] = 0.0
         for frame in range(video.shape[0]):
             self.video.append(video[frame, :, :, :])
 
@@ -241,24 +304,43 @@ class Video:
         if len(self.video) < 1:
             return
 
-        temp_file = next(tempfile._get_candidate_names())
-        self.Save("/tmp", temp_file, fps=25)
+        temp_file = filify(board.env) + "_" + filify(id)
+        self.Save("/tmp", temp_file)
         full_path = "/tmp/" + temp_file + '.mp4'
-        board.video(videofile=full_path, win=id)
 
-    def Save(self, path, name, fps=15, gif=False, extension=".mp4"):
+        opts = dict(fps=self.fps)
+        board.video(videofile=full_path, win=id, opts=opts)
+
+    def Save(self, path, name, gif=False, extension=".mp4"):
         if not os.path.exists(path):
             os.makedirs(path)
 
+        video_path = path + '/' + name
         if gif:
+            video_path += '.gif'
             gif_frames = []
             for single_frame in self.video:
                 gif_frames.append(np.rollaxis(single_frame, 0, 3))
-            imageio.mimsave(path + '/' + name + '.gif', gif_frames, fps=fps)
+            imageio.mimsave(path + '/' + name + '.gif', gif_frames, fps=self.fps)
         else:
-            menpo.image.Image
-            menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
-                                  path + '/' + name + extension, fps=fps, overwrite=True)
+            video_path += extension
+            if self.audio is None:
+                menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
+                                      video_path, fps=fps, overwrite=True)
+            else:
+                temp_filename = next(tempfile._get_candidate_names())
+                menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
+                                      "/tmp/" + temp_filename + ".mp4", fps=self.fps, overwrite=True)
+                wav.write("/tmp/" + temp_filename + ".wav", self.rate, self.audio)
+
+                with open(os.devnull, 'w') as dump:
+                    call("ffmpeg -y -i /tmp/" + temp_filename + ".mp4 -i /tmp/" + temp_filename + ".wav"
+                                                                                                  " -c:a aac -strict -2 -shortest " + video_path,
+                         shell=True, stdout=dump, stderr=dump)
+
+                    with open(os.devnull, 'w') as dump:
+                        call("rm -rf /tmp/" + temp_filename + ".mp4", shell=True, stdout=dump, stderr=dump)
+                        call("rm -rf /tmp/" + temp_filename + ".wav", shell=True, stdout=dump, stderr=dump)
 
 
 class Bulletin():
@@ -276,12 +358,20 @@ class Bulletin():
     def ClearBulletin(self):
         self.Posts.clear()
 
-    def CreateImage(self, image, id):
+    def CreateImage(self, id, image):
         self.Posts[id] = Image(image)
         return self.Posts[id]
 
-    def CreateVideo(self, id, video=np.array([])):
-        self.Posts[id] = Video(video)
+    def CreateAudio(self, id, audio, rate=50000):
+        self.Posts[id] = Audio(audio, rate)
+        return self.Posts[id]
+
+    def CreateVideo(self, id, video=np.array([]), fps=25, audio=None, rate=50000):
+        self.Posts[id] = Video(video, fps, audio, rate)
+        return self.Posts[id]
+
+    def CreateTable(self, id, headers, table_data=[]):
+        self.Posts[id] = Table(headers, table_data)
         return self.Posts[id]
 
     def CreateGraph(self, id, labels, axis_x=None, axis_y=None, window=-1):
@@ -309,6 +399,6 @@ class Bulletin():
             save_path = self.save_path
         for post in self.Posts:
             if post != None:
-                self.Posts[post].Save(save_path, post.replace(" ", "_"))
+                self.Posts[post].Save(save_path, filify(post))
             else:
                 del self.Posts[post]
