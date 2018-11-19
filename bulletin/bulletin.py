@@ -8,7 +8,7 @@ import imageio
 import menpo
 import os
 import tempfile
-import html_table
+from .html_table import table
 import scipy.io.wavfile as wav
 from subprocess import call
 
@@ -253,7 +253,7 @@ class Table:
             self.table.append(row)
 
     def _Post(self, board, id):
-        htmlcode = html_table.table(self.table, header_row=self.headers, style="width:100%")
+        htmlcode = table(self.table, header_row=self.headers, style="width:100%")
         board.text(htmlcode, win=id)
 
     def Save(self):
