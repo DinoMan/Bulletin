@@ -8,7 +8,7 @@ import imageio
 import menpo
 import os
 import tempfile
-import .html_table
+import html_table
 import scipy.io.wavfile as wav
 from subprocess import call
 
@@ -21,7 +21,8 @@ def filify(string):
 
 
 class Scatter:
-    def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=30, iterations=10000,
+    def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=10,
+                 iterations=2000,
                  filter_name=None):
         self.no_points = datapoints.shape[0]
         self.label_mapping = {}
@@ -44,7 +45,7 @@ class Scatter:
         self.names = None
         self.filter_name = filter_name
 
-        if (labels is None) or (isinstance(labels[0], (int, long)) and (1 in labels)):
+        if (labels is None) or (isinstance(labels[0], int) and (1 in labels)):
             return
 
         no_entries = 1
@@ -53,8 +54,8 @@ class Scatter:
                 self.label_mapping[name] = no_entries
                 no_entries += 1
 
-        self.labels = map(self.label_mapping.get, self.labels)
-        self.names = sorted(self.label_mapping, key=self.label_mapping.__getitem__)
+        self.labels = list(map(self.label_mapping.get, self.labels))
+        self.names = list(sorted(self.label_mapping, key=self.label_mapping.__getitem__))
 
     def _Post(self, board, id):
         win_name = id
@@ -149,6 +150,10 @@ class Graph:
             self.axis_y = axis_y
 
         self.labels = labels
+
+    def Clear(self):
+        self.x = None
+        self.y = None
 
     def _Post(self, board, id):
         if self.x_batch.size <= 2:
@@ -326,7 +331,7 @@ class Video:
             video_path += extension
             if self.audio is None:
                 menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
-                                      video_path, fps=fps, overwrite=True)
+                                      video_path, fps=self.fps, overwrite=True)
             else:
                 temp_filename = next(tempfile._get_candidate_names())
                 menpo.io.export_video([menpo.image.Image(frame, copy=False) for frame in self.video],
@@ -382,8 +387,8 @@ class Bulletin():
         self.Posts[id] = Histogram(x, numbins, axis_x, axis_y)
         return self.Posts[id]
 
-    def CreateScatterPlot(self, id, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=30,
-                          iterations=10000):
+    def CreateScatterPlot(self, id, datapoints, labels=None, sequence_coloring=True, t_sne=False,
+                          perplexity=30, iterations=10000):
         self.Posts[id] = Scatter(datapoints, labels, sequence_coloring, t_sne, perplexity, iterations)
         return self.Posts[id]
 
