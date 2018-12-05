@@ -119,7 +119,6 @@ class Histogram:
                         win=id)
 
     def Save(self, path, name):
-        bin_size = (self.x.max() - self.x.min()) / self.numbins
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + id)
@@ -128,6 +127,54 @@ class Histogram:
 
             for csv_line in range(len(hist)):
                 line_writer.writerow([bin_location] + hist[csv_line])
+
+
+class Plot():
+    def __init__(self, labels, y, x=None, axis_x=None, axis_y=None):
+        if hasattr(y, '__iter__'):
+            max_len = len(max(y, key=len))
+            l = []
+            for y_i in y:
+                pad_length = max_len - len(y_i)
+                l.append(np.pad(y_i, (0, pad_length), 'constant', constant_values=np.nan))
+            self.y = np.vstack(l).transpose()
+        else:
+            self.y = y
+            max_len = len(y)
+
+        if x is None:
+            self.x = np.arange(0, max_len)
+        else:
+            self.x = x
+
+        self.labels = labels
+
+        if not axis_x:
+            self.axis_x = "X"
+        else:
+            self.axis_x = axis_x
+
+        if not axis_y:
+            self.axis_y = "Y"
+        else:
+            self.axis_y = axis_y
+
+    def _Post(self, board, id):
+
+        board.line(Y=self.y,
+                   X=self.x,
+                   opts={'title': id,
+                         'legend': self.labels,
+                         'xlabel': self.axis_x,
+                         'ylabel': self.axis_y},
+                   win=id)
+
+    def Save(self, path, name):
+        with open(path + "/" + name + '.csv', 'w') as csvfile:
+            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer.writerow([self.axis_x] + self.labels)
+            for csv_line in range(len(self.x)):
+                line_writer.writerow(np.append([self.x[csv_line]], self.y[csv_line, :]))
 
 
 class Graph:
@@ -223,7 +270,10 @@ class Image:
         if scale is None:
             self.img = img
         else:
-            self.img = np.rollaxis(scipy.misc.imresize(img, scale), 2, 0)
+            if img.shape[0] == 1:
+                self.img = scipy.misc.imresize(np.squeeze(img), scale)
+            else:
+                self.img = np.rollaxis(scipy.misc.imresize(img, scale), 2, 0)
 
     def _Post(self, board, id):
         if self.img.size == 0:
@@ -267,7 +317,7 @@ class Table:
 
 class Audio():
     def __init__(self, audio=np.array([]), rate=50000):
-        self.audio = audio
+        self.audio = ((2 ** 15) * audio).astype(np.int16)
         self.rate = rate
 
     def _Post(self, board, id):
@@ -363,8 +413,8 @@ class Bulletin():
     def ClearBulletin(self):
         self.Posts.clear()
 
-    def CreateImage(self, id, image):
-        self.Posts[id] = Image(image)
+    def CreateImage(self, id, image, scale=2.0):
+        self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
     def CreateAudio(self, id, audio, rate=50000):
@@ -378,6 +428,10 @@ class Bulletin():
     def CreateTable(self, id, headers, table_data=[]):
         self.Posts[id] = Table(headers, table_data)
         return self.Posts[id]
+
+    def CreatePlot(self, id, labels, y, x=None, axis_x=None, axis_y=None):
+        self.Posts[id] = Plot(labels, y, x, axis_x, axis_y)
+        return
 
     def CreateGraph(self, id, labels, axis_x=None, axis_y=None, window=-1):
         self.Posts[id] = Graph(labels, axis_x, axis_y, window)
