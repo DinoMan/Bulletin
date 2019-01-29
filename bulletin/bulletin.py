@@ -11,6 +11,7 @@ import tempfile
 from .html_table import table
 import scipy.io.wavfile as wav
 from subprocess import call
+from scipy import signal
 
 
 def filify(string):
@@ -316,9 +317,12 @@ class Table:
 
 
 class Audio():
-    def __init__(self, audio=np.array([]), rate=50000):
+    def __init__(self, audio=np.array([]), rate=50000, spectrogram=False):
         self.audio = ((2 ** 15) * audio).astype(np.int16)
         self.rate = rate
+        self.spectrogram = spectrogram
+        if self.spectrogram:
+            self.freq, self.sample_time, self.Sxx = signal.spectrogram(self.audio, self.rate)
 
     def _Post(self, board, id):
         temp_file = filify(board.env) + "_" + filify(id)
@@ -326,9 +330,17 @@ class Audio():
         full_path = "/tmp/" + temp_file + '.wav'
         opts = dict(sample_frequency=self.rate)
         board.audio(audiofile=full_path, win=id, opts=opts)
+        if self.spectrogram:
+            self._post_spectrogram_(board, id)
 
     def Save(self, path, name):
         wav.write(path + '/' + name + ".wav", self.rate, self.audio)
+
+    def _post_spectrogram_(self, board, id):
+        spectrogram_id = "Spectrogram of " + id
+        time_freq_map = {"rownames": self.freq.tolist(), "columnnames": self.sample_time.tolist(),
+                         "title": spectrogram_id}
+        board.heatmap(X=self.Sxx, opts=time_freq_map, win=spectrogram_id)
 
 
 class Video:
@@ -389,8 +401,8 @@ class Video:
                 wav.write("/tmp/" + temp_filename + ".wav", self.rate, self.audio)
 
                 with open(os.devnull, 'w') as dump:
-                    call("ffmpeg -y -i /tmp/" + temp_filename + ".mp4 -i /tmp/" + temp_filename + ".wav"
-                                                                                                  " -c:a aac -strict -2 -shortest " + video_path,
+                    call("ffmpeg -y -i /tmp/" + temp_filename + ".mp4 -i /tmp/" + temp_filename +
+                         ".wav -c:a aac -strict -2 -shortest " + video_path,
                          shell=True, stdout=dump, stderr=dump)
 
                     with open(os.devnull, 'w') as dump:
