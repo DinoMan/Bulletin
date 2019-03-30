@@ -9,7 +9,8 @@ setup(name='bulletin',
           'matplotlib',
           'menpo',
           'scipy',
-          'numpy'
+          'numpy',
+          'ffmpeg-python'
       ],
       zip_safe=False)
 

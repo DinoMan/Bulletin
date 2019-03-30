@@ -10,7 +10,7 @@ import os
 import tempfile
 from .html_table import table
 import scipy.io.wavfile as wav
-from subprocess import call
+import ffmpeg
 from scipy import signal
 
 
@@ -400,14 +400,14 @@ class Video:
                                       "/tmp/" + temp_filename + ".mp4", fps=self.fps, overwrite=True)
                 wav.write("/tmp/" + temp_filename + ".wav", self.rate, self.audio)
 
-                with open(os.devnull, 'w') as dump:
-                    call("ffmpeg -y -i /tmp/" + temp_filename + ".mp4 -i /tmp/" + temp_filename +
-                         ".wav -c:a aac -strict -2 -shortest " + video_path,
-                         shell=True, stdout=dump, stderr=dump)
+                in1 = ffmpeg.input("/tmp/" + temp_filename + ".mp4")
+                in2 = ffmpeg.input("/tmp/" + temp_filename + ".wav")
 
-                    with open(os.devnull, 'w') as dump:
-                        call("rm -rf /tmp/" + temp_filename + ".mp4", shell=True, stdout=dump, stderr=dump)
-                        call("rm -rf /tmp/" + temp_filename + ".wav", shell=True, stdout=dump, stderr=dump)
+                out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
+                out.run(quiet=True)
+
+                os.remove("/tmp/" + temp_filename + ".mp4")
+                os.remove("/tmp/" + temp_filename + ".wav")
 
 
 class Bulletin():
