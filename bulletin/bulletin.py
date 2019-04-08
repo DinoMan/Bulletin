@@ -429,8 +429,8 @@ class Bulletin():
         self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
-    def CreateAudio(self, id, audio, rate=50000):
-        self.Posts[id] = Audio(audio, rate)
+    def CreateAudio(self, id, audio, rate=50000, spectrogram=False):
+        self.Posts[id] = Audio(audio, rate, spectrogram=spectrogram)
         return self.Posts[id]
 
     def CreateVideo(self, id, video=np.array([]), fps=25, audio=None, rate=50000):

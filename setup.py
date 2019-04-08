@@ -10,6 +10,8 @@ setup(name='bulletin',
           'menpo',
           'scipy',
           'numpy',
+          'scikit-learn',
+          'imageio',
           'ffmpeg-python'
       ],
       zip_safe=False)
