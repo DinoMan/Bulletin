@@ -121,7 +121,7 @@ class Histogram:
 
     def Save(self, path, name):
         with open(path + "/" + name + '.csv', 'w') as csvfile:
-            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer = csv.writer(csvfile, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + id)
             bin_location = self.x.min()
             hist = np.histogram(self.x, bins=self.numbins)
@@ -372,13 +372,16 @@ class Video:
             return
 
         temp_file = filify(board.env) + "_" + filify(id)
-        self.Save("/tmp", temp_file)
+        if not self.Save("/tmp", temp_file):
+            return
+
         full_path = "/tmp/" + temp_file + '.mp4'
 
         opts = dict(fps=self.fps)
         board.video(videofile=full_path, win=id, opts=opts)
 
     def Save(self, path, name, gif=False, extension=".mp4"):
+        success = True
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -400,14 +403,21 @@ class Video:
                                       "/tmp/" + temp_filename + ".mp4", fps=self.fps, overwrite=True)
                 wav.write("/tmp/" + temp_filename + ".wav", self.rate, self.audio)
 
-                in1 = ffmpeg.input("/tmp/" + temp_filename + ".mp4")
-                in2 = ffmpeg.input("/tmp/" + temp_filename + ".wav")
+                try:
+                    in1 = ffmpeg.input("/tmp/" + temp_filename + ".mp4")
+                    in2 = ffmpeg.input("/tmp/" + temp_filename + ".wav")
 
-                out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
-                out.run(quiet=True)
+                    out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
+                    out.run(quiet=True)
+                except:
+                    success = False
 
-                os.remove("/tmp/" + temp_filename + ".mp4")
-                os.remove("/tmp/" + temp_filename + ".wav")
+                if os.path.isfile("/tmp/" + temp_filename + ".mp4"):
+                    os.remove("/tmp/" + temp_filename + ".mp4")
+                if os.path.isfile("/tmp/" + temp_filename + ".wav"):
+                    os.remove("/tmp/" + temp_filename + ".wav")
+
+        return success
 
 
 class Bulletin():
