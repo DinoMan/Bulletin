@@ -23,8 +23,7 @@ def filify(string):
 
 class Scatter:
     def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=10,
-                 iterations=2000,
-                 filter_name=None):
+                 iterations=2000, filter_name=None):
         self.no_points = datapoints.shape[0]
         self.label_mapping = {}
         self.labels = labels
@@ -344,7 +343,7 @@ class Audio():
 
 
 class Video:
-    def __init__(self, video=np.array([]), fps=25, audio=None, rate=50000):
+    def __init__(self, video=np.array([]), fps=25, audio=None, rate=50000, ffmpeg_experimental=False):
         if video.size == 0:
             self.video = []
         else:
@@ -354,6 +353,7 @@ class Video:
         self.fps = fps
         self.audio = audio
         self.rate = rate
+        self.ffmpeg_experimental = ffmpeg_experimental
 
     def Clear(self):
         self.video = []
@@ -407,7 +407,10 @@ class Video:
                     in1 = ffmpeg.input("/tmp/" + temp_filename + ".mp4")
                     in2 = ffmpeg.input("/tmp/" + temp_filename + ".wav")
 
-                    out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
+                    if self.ffmpeg_experimental:
+                        out = ffmpeg.output(in1['v'], in2['a'], video_path, strict='-2', loglevel="panic").overwrite_output()
+                    else:
+                        out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
                     out.run(quiet=True)
                 except:
                     success = False
@@ -421,10 +424,11 @@ class Video:
 
 
 class Bulletin():
-    def __init__(self, server='http://localhost', save_path='.', env='main'):
+    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False):
         self.vis = visdom.Visdom(env=env, server=server)
         self.Posts = {}
         self.save_path = save_path
+        self.ffmpeg_experimental = ffmpeg_experimental
 
     def DeleteItem(self, id):
         self.Posts.pop(id)
@@ -444,7 +448,7 @@ class Bulletin():
         return self.Posts[id]
 
     def CreateVideo(self, id, video=np.array([]), fps=25, audio=None, rate=50000):
-        self.Posts[id] = Video(video, fps, audio, rate)
+        self.Posts[id] = Video(video, fps, audio, rate, ffmpeg_experimental=self.ffmpeg_experimental)
         return self.Posts[id]
 
     def CreateTable(self, id, headers, table_data=[]):
