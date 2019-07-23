@@ -8,10 +8,34 @@ import imageio
 import menpo
 import os
 import tempfile
-from .html_table import table
+import cv2
+
+try:
+    from .html_table import table
+except:
+    from html_table import table
+
 import scipy.io.wavfile as wav
 import ffmpeg
 from scipy import signal
+import warnings
+
+FACE_EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+              (10, 11), (11, 12), (12, 13), (13, 14), (14, 15), (15, 16),  # chin
+              (17, 18), (18, 19), (19, 20), (20, 21),  # right eyebrow
+              (22, 23), (23, 24), (24, 25), (25, 26),  # left eyebrow
+              (27, 28), (28, 29), (29, 30),  # nose bridge
+              (31, 32), (32, 33), (33, 34), (34, 35),  # nose tip
+              (36, 37), (37, 38), (38, 39), (39, 40), (40, 41), (41, 36),  # right eye
+              (42, 43), (43, 44), (44, 45), (45, 46), (46, 47), (47, 42),  # left eye
+              (48, 49), (49, 50), (50, 51), (51, 52), (52, 53), (53, 54),
+              (54, 55), (55, 56), (56, 57), (57, 58), (58, 59), (59, 48),  # outer mouth
+              (60, 61), (61, 62), (62, 63), (63, 64), (64, 65), (65, 66),
+              (66, 67), (67, 60)]  # inner mouth
+
+
+def swp_extension(file, ext):
+    return os.path.splitext(file)[0] + ext
 
 
 def filify(string):
@@ -306,7 +330,7 @@ class Table:
         htmlcode = table(self.table, header_row=self.headers, style="width:100%")
         board.text(htmlcode, win=id)
 
-    def Save(self):
+    def Save(self, path, name):
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow(self.headers)
@@ -408,7 +432,8 @@ class Video:
                     in2 = ffmpeg.input("/tmp/" + temp_filename + ".wav")
 
                     if self.ffmpeg_experimental:
-                        out = ffmpeg.output(in1['v'], in2['a'], video_path, strict='-2', loglevel="panic").overwrite_output()
+                        out = ffmpeg.output(in1['v'], in2['a'], video_path, strict='-2',
+                                            loglevel="panic").overwrite_output()
                     else:
                         out = ffmpeg.output(in1['v'], in2['a'], video_path, loglevel="panic").overwrite_output()
                     out.run(quiet=True)
@@ -421,6 +446,125 @@ class Video:
                     os.remove("/tmp/" + temp_filename + ".wav")
 
         return success
+
+
+class JointAnimation():
+    def __init__(self, points=np.array([]), edges=[], fps=25, audio=None, rate=50000, ffmpeg_experimental=False):
+        self.points = points
+        if edges == "face":
+            self.edges = FACE_EDGES
+        else:
+            self.edges = edges
+        self.fps = int(fps)
+        self.audio = audio
+        self.rate = rate
+        self.max_canvas = []
+        self.min_canvas = []
+        self._perform_checks_()
+        self.ffmpeg_experimental = ffmpeg_experimental
+
+    def clear(self):
+        self.points = np.array([])
+
+    def _perform_checks_(self):
+        if self.points.size != 0:
+
+            for i in range(2):
+                self.max_canvas.append(np.amax(self.points[:, :, i]))
+                self.min_canvas.append(np.amin(self.points[:, :, i]))
+
+        if self.points.ndim == 3 and self.points.shape[2] > 3:
+            warnings.warn("points have dimension larger than 3", RuntimeWarning)
+
+    def add_frame(self, frame):
+        self.points = np.vstack([self.points, frame])
+        self._perform_checks_()
+
+    def add_audio(self, audio=None, rate=50000):
+        self.audio = audio
+        self.rate = rate
+
+    def load(self, landmarks, dim=2, order=[1, 0]):
+        with open(landmarks, 'rt', encoding="ascii") as csvfile:
+            csvreader = csv.reader(csvfile, delimiter=',')
+
+            seq_landmarks = None
+            for frame_no, landmarks in enumerate(csvreader):
+                landmark = np.zeros([1, len(landmarks) // dim, dim])
+                for point in range(1, len(landmarks), dim):
+                    for i, j in enumerate(order):
+                        landmark[0, point // dim, i] = int(landmarks[point + j])
+
+                if seq_landmarks is None:
+                    seq_landmarks = landmark
+                else:
+                    seq_landmarks = np.vstack([seq_landmarks, landmark])
+
+        self.points = seq_landmarks
+        self._perform_checks_()
+
+    def _Post(self, board, id):
+        if len(self.video) < 1:
+            return
+
+        temp_file = filify(board.env) + "_" + filify(id)
+        if not self.Save("/tmp", temp_file):
+            return
+
+        full_path = "/tmp/" + temp_file + '.mp4'
+
+        opts = dict(fps=self.fps)
+        board.video(videofile=full_path, win=id, opts=opts)
+
+    def Save(self, path, name, colour=(255, 0, 0)):
+        width = int(self.max_canvas[0] - self.min_canvas[0])
+        height = int(self.max_canvas[1] - self.min_canvas[1])
+
+        if self.audio is None:
+            filename = path + "/" + name + ".mp4"
+        else:
+            filename = "/tmp/" + next(tempfile._get_candidate_names()) + ".mp4"
+
+        video = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*"mp4v"), float(self.fps),
+                                (height, width))
+        for frame in self.points:
+            frame = frame - np.array([self.min_canvas[0], self.min_canvas[1]])
+            canvas = np.ones([width, height, 3])
+            canvas *= (255, 255, 255)  # canvas is by default white
+
+            for node in frame:
+                cv2.circle(canvas, (int(node[0]), int(node[1])), 2, colour, -1)
+
+            for edge in self.edges:
+                cv2.line(canvas,
+                         (int(frame[edge[0]][0]), int(frame[edge[0]][1])),
+                         (int(frame[edge[1]][0]), int(frame[edge[1]][1])),
+                         colour, 1)
+
+            video.write(canvas.astype('uint8'))
+        video.release()
+
+        if self.audio is not None:
+            wav.write(swp_extension(filename, ".wav"), self.rate, self.audio)
+            try:
+                in1 = ffmpeg.input(filename)
+                in2 = ffmpeg.input(swp_extension(filename, ".wav"))
+
+                if self.ffmpeg_experimental:
+                    out = ffmpeg.output(in1['v'], in2['a'], path + "/" + name + ".mp4", strict='-2',
+                                        loglevel="panic").overwrite_output()
+                else:
+                    out = ffmpeg.output(in1['v'], in2['a'], path + "/" + name + ".mp4",
+                                        loglevel="panic").overwrite_output()
+                out.run(quiet=True)
+            except:
+                warnings.warn("Problem mixing video and audio", RuntimeWarning)
+                success = False
+
+            if os.path.isfile(filename):
+                os.remove(filename)
+            if os.path.isfile(swp_extension(filename, ".wav")):
+                os.remove(swp_extension(filename, ".wav"))
 
 
 class Bulletin():
@@ -438,6 +582,10 @@ class Bulletin():
 
     def ClearBulletin(self):
         self.Posts.clear()
+
+    def create_joint_animation(self, points, edges=None, fps=25, audio=None, rate=50000):
+        self.Posts[id] = JointAnimation(points, edges, fps, audio, rate)
+        return self.Posts[id]
 
     def CreateImage(self, id, image, scale=2.0):
         self.Posts[id] = Image(image, scale=scale)
