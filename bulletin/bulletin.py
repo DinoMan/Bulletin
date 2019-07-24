@@ -568,8 +568,8 @@ class JointAnimation():
 
 
 class Bulletin():
-    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False):
-        self.vis = visdom.Visdom(env=env, server=server)
+    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None, password=None):
+        self.vis = visdom.Visdom(env=env, server=server, username=username, password=password)
         self.Posts = {}
         self.save_path = save_path
         self.ffmpeg_experimental = ffmpeg_experimental

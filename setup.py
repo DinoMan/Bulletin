@@ -12,7 +12,9 @@ setup(name='bulletin',
           'numpy',
           'scikit-learn',
           'imageio',
-          'ffmpeg-python'
+          'ffmpeg-python',
+          'visdom',
+          'opencv-python',
       ],
       zip_safe=False)
 
