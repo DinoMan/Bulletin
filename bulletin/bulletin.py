@@ -260,10 +260,6 @@ class Graph:
                                  'ylabel': self.axis_y},
                            win=id)
             else:
-                # Lines added to make use of the fast update, which however has a bug. It is fixed in the recent trunk
-                if self.y_batch.ndim == 2 and self.x_batch.ndim == 1:
-                    X = np.tile(self.x_batch, (self.y_batch.shape[1], 1)).transpose()
-
                 board.line(Y=self.y_batch,
                            X=X,
                            win=id,
@@ -449,17 +445,29 @@ class Video:
 
 
 class JointAnimation():
-    def __init__(self, points=np.array([]), edges=[], fps=25, audio=None, rate=50000, ffmpeg_experimental=False):
-        self.points = points
+    def __init__(self, points=np.array([]), edges=[], fps=25, audio=None, rate=50000,
+                 order=None, colour=None, ffmpeg_experimental=False):
+        self.points = points.copy()
         if edges == "face":
             self.edges = FACE_EDGES
         else:
             self.edges = edges
+
+        if colour is None:
+            self.colour = (255, 0, 0)
+        else:
+            self.colour = colour
+
         self.fps = int(fps)
         self.audio = audio
         self.rate = rate
         self.max_canvas = []
         self.min_canvas = []
+
+        if order is not None:
+            for i in range(len(order)):
+                self.points[:, :, i] = points[:, :, order[i]]
+
         self._perform_checks_()
         self.ffmpeg_experimental = ffmpeg_experimental
 
@@ -484,7 +492,7 @@ class JointAnimation():
         self.audio = audio
         self.rate = rate
 
-    def load(self, landmarks, dim=2, order=[1, 0]):
+    def load(self, landmarks, dim=2, order=None):
         with open(landmarks, 'rt', encoding="ascii") as csvfile:
             csvreader = csv.reader(csvfile, delimiter=',')
 
@@ -504,9 +512,6 @@ class JointAnimation():
         self._perform_checks_()
 
     def _Post(self, board, id):
-        if len(self.video) < 1:
-            return
-
         temp_file = filify(board.env) + "_" + filify(id)
         if not self.Save("/tmp", temp_file):
             return
@@ -516,7 +521,7 @@ class JointAnimation():
         opts = dict(fps=self.fps)
         board.video(videofile=full_path, win=id, opts=opts)
 
-    def Save(self, path, name, colour=(255, 0, 0)):
+    def Save(self, path, name):
         width = int(self.max_canvas[0] - self.min_canvas[0])
         height = int(self.max_canvas[1] - self.min_canvas[1])
 
@@ -533,13 +538,13 @@ class JointAnimation():
             canvas *= (255, 255, 255)  # canvas is by default white
 
             for node in frame:
-                cv2.circle(canvas, (int(node[0]), int(node[1])), 2, colour, -1)
+                cv2.circle(canvas, (int(node[0]), int(node[1])), 2, self.colour, -1)
 
             for edge in self.edges:
                 cv2.line(canvas,
                          (int(frame[edge[0]][0]), int(frame[edge[0]][1])),
                          (int(frame[edge[1]][0]), int(frame[edge[1]][1])),
-                         colour, 1)
+                         self.colour, 1)
 
             video.write(canvas.astype('uint8'))
         video.release()
@@ -568,7 +573,8 @@ class JointAnimation():
 
 
 class Bulletin():
-    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None, password=None):
+    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None,
+                 password=None):
         self.vis = visdom.Visdom(env=env, server=server, username=username, password=password)
         self.Posts = {}
         self.save_path = save_path
@@ -583,11 +589,12 @@ class Bulletin():
     def ClearBulletin(self):
         self.Posts.clear()
 
-    def create_joint_animation(self, points, edges=None, fps=25, audio=None, rate=50000):
-        self.Posts[id] = JointAnimation(points, edges, fps, audio, rate)
+    def create_joint_animation(self, id, points, edges=None, fps=25, audio=None, rate=50000, order=None, colour=None):
+        self.Posts[id] = JointAnimation(points, edges, fps, audio, rate, order, colour,
+                                        ffmpeg_experimental=self.ffmpeg_experimental)
         return self.Posts[id]
 
-    def CreateImage(self, id, image, scale=2.0):
+    def CreateImage(self, id, image, scale=1.0):
         self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
