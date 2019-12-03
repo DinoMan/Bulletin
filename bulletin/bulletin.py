@@ -238,7 +238,7 @@ class Graph:
                 self.y = self.y[-self.window:, :]
                 self.x = self.x[-self.window:]
 
-            board.line(Y=self.y,
+            board.line(Y=self.y.squeeze(),
                        X=self.x,
                        opts={'title': id,
                              'legend': self.labels,
@@ -252,7 +252,7 @@ class Graph:
             if self.window > 0 and self.x.shape[0] >= self.window:
                 self.y = self.y[-self.window:, :]
                 self.x = self.x[-self.window:]
-                board.line(Y=self.y,
+                board.line(Y=self.y.squeeze(),
                            X=self.x,
                            opts={'title': id,
                                  'legend': self.labels,
@@ -260,7 +260,7 @@ class Graph:
                                  'ylabel': self.axis_y},
                            win=id)
             else:
-                board.line(Y=self.y_batch,
+                board.line(Y=self.y_batch.squeeze(),
                            X=self.x_batch,
                            win=id,
                            update='append')
