@@ -261,7 +261,7 @@ class Graph:
                            win=id)
             else:
                 board.line(Y=self.y_batch,
-                           X=X,
+                           X=self.x_batch,
                            win=id,
                            update='append')
 
