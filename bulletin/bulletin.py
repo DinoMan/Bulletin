@@ -1,4 +1,3 @@
-import scipy.misc
 import visdom
 import numpy as np
 from sklearn.manifold import TSNE
@@ -286,23 +285,23 @@ class Graph:
 
 
 class Image:
-    def __init__(self, img, scale=2.0):
+    def __init__(self, img, scale=1.0):
+        img = np.squeeze(255 * img).astype(np.uint8)
         if scale is None:
             self.img = img
         else:
-            if img.shape[0] == 1:
-                self.img = scipy.misc.imresize(np.squeeze(img), scale)
+            if img.ndim == 2:
+                self.img = cv2.resize(img, (int(scale * img.shape[0]), int(scale * np.squeeze(img).shape[1])))
             else:
-                self.img = np.rollaxis(scipy.misc.imresize(img, scale), 2, 0)
-
+                self.img = np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]), int(scale * np.squeeze(img).shape[2]))), 0, 2)
+                
     def _Post(self, board, id):
         if self.img.size == 0:
             return
-
         board.image(self.img, opts=dict(title=id), win=id)
 
     def Save(self, path, name):
-        scipy.misc.imsave(path + '/' + name + '.jpg', np.rollaxis(self.img, 0, 3))
+        cv2.imwrite(path + '/' + name + '.jpg', np.rollaxis(self.img, 0, 3))
 
 
 class Table:
