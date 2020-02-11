@@ -586,7 +586,7 @@ class AdjustableParameter():
 
 class Bulletin():
     def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None, password=None,
-                 interactive=True):
+                 interactive=False):
         self.vis = visdom.Visdom(env=env, server=server, username=username, password=password)
         self.Posts = {}
         self.save_path = save_path
