@@ -294,7 +294,7 @@ class Image:
                 self.img = cv2.resize(img, (int(scale * img.shape[0]), int(scale * np.squeeze(img).shape[1])))
             else:
                 self.img = np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]), int(scale * np.squeeze(img).shape[2]))), 0, 2)
-                
+
     def _Post(self, board, id):
         if self.img.size == 0:
             return
@@ -563,7 +563,6 @@ class JointAnimation():
                 out.run(quiet=True)
             except:
                 warnings.warn("Problem mixing video and audio", RuntimeWarning)
-                success = False
 
             if os.path.isfile(filename):
                 os.remove(filename)
@@ -571,13 +570,48 @@ class JointAnimation():
                 os.remove(swp_extension(filename, ".wav"))
 
 
+class AdjustableParameter():
+    def __init__(self, init):
+        self.value = float(init)
+
+    def as_float(self):
+        return self.value
+
+    def as_int(self):
+        return int(self.value)
+
+    def update(self, value):
+        self.value = float(value)
+
+
 class Bulletin():
-    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None,
-                 password=None):
+    def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None, password=None,
+                 interactive=True):
         self.vis = visdom.Visdom(env=env, server=server, username=username, password=password)
         self.Posts = {}
         self.save_path = save_path
         self.ffmpeg_experimental = ffmpeg_experimental
+        if interactive:
+            self.properties = [{'type': 'button', 'name': 'Message', 'value': 'Hello!'}]
+            self.callbacks = [self.clear_message]
+            self.controled_variables = [self.clear_message]
+            self.properties_window = self.vis.properties(self.properties)
+            self.vis.register_event_handler(self._control_window_callback_, self.properties_window)
+
+    def clear_message(self, event):
+        return "Messages Cleared!"
+
+    def _control_window_callback_(self, event):
+        if event['event_type'] == 'PropertyUpdate':
+            prop_id = event['propertyId']
+            value = event['value']
+            message = self.callbacks[prop_id](value)
+            if message is not None:
+                self.properties[0]['value'] = message
+            elif prop_id:
+                self.properties[prop_id]['value'] = value
+
+            self.vis.properties(self.properties, win=self.properties_window)
 
     def DeleteItem(self, id):
         self.Posts.pop(id)
@@ -587,6 +621,18 @@ class Bulletin():
 
     def ClearBulletin(self):
         self.Posts.clear()
+
+    def add_text_control(self, label, callback, initial=""):
+        self.properties += [{'type': 'text', 'name': label, 'value': initial}]
+        self.callbacks += [callback]
+        self.vis.properties(self.properties, win=self.properties_window)
+
+    def add_adjustable_parameter(self, label, initial=0):
+        self.properties += [{'type': 'number', 'name': label, 'value': str(initial)}]
+        self.controled_variables.append(AdjustableParameter(initial))
+        self.callbacks += [self.controled_variables[-1].update]
+        self.vis.properties(self.properties, win=self.properties_window)
+        return self.controled_variables[-1]
 
     def create_joint_animation(self, id, points, edges=None, fps=25, audio=None, rate=50000, order=None, colour=None):
         self.Posts[id] = JointAnimation(points, edges, fps, audio, rate, order, colour,
@@ -629,7 +675,10 @@ class Bulletin():
     def Post(self):
         for post in self.Posts:
             if post != None:
-                self.Posts[post]._Post(self.vis, post)
+                try:
+                    self.Posts[post]._Post(self.vis, post)
+                except:
+                    warnings.warn("Couldn't post to bulletin", RuntimeWarning)
             else:
                 del self.Posts[post]
 
