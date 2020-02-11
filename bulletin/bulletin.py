@@ -194,7 +194,7 @@ class Plot():
 
     def Save(self, path, name):
         with open(path + "/" + name + '.csv', 'w') as csvfile:
-            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
             for csv_line in range(len(self.x)):
                 line_writer.writerow(np.append([self.x[csv_line]], self.y[csv_line, :]))
@@ -269,7 +269,7 @@ class Graph:
 
     def Save(self, path, name):
         with open(path + "/" + name + '.csv', 'w') as csvfile:
-            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
             for csv_line in range(len(self.x)):
                 line_writer.writerow(np.append([self.x[csv_line]], self.y[csv_line, :]))
@@ -327,7 +327,7 @@ class Table:
 
     def Save(self, path, name):
         with open(path + "/" + name + '.csv', 'w') as csvfile:
-            line_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow(self.headers)
             for csv_line in self.table:
                 line_writer.writerow(csv_line)
