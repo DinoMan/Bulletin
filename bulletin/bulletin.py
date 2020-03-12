@@ -591,10 +591,11 @@ class Bulletin():
         self.Posts = {}
         self.save_path = save_path
         self.ffmpeg_experimental = ffmpeg_experimental
-        if interactive:
+        self.interactive = interactive
+        self.controlled_variables = [self.clear_message]
+        if self.interactive:
             self.properties = [{'type': 'button', 'name': 'Message', 'value': 'Hello!'}]
             self.callbacks = [self.clear_message]
-            self.controled_variables = [self.clear_message]
             self.properties_window = self.vis.properties(self.properties)
             self.vis.register_event_handler(self._control_window_callback_, self.properties_window)
 
@@ -628,11 +629,12 @@ class Bulletin():
         self.vis.properties(self.properties, win=self.properties_window)
 
     def add_adjustable_parameter(self, label, initial=0):
-        self.properties += [{'type': 'number', 'name': label, 'value': str(initial)}]
-        self.controled_variables.append(AdjustableParameter(initial))
-        self.callbacks += [self.controled_variables[-1].update]
-        self.vis.properties(self.properties, win=self.properties_window)
-        return self.controled_variables[-1]
+        self.controlled_variables.append(AdjustableParameter(initial))
+        if self.interactive:
+            self.properties += [{'type': 'number', 'name': label, 'value': str(initial)}]
+            self.callbacks += [self.controlled_variables[-1].update]
+            self.vis.properties(self.properties, win=self.properties_window)
+        return self.controlled_variables[-1]
 
     def create_joint_animation(self, id, points, edges=None, fps=25, audio=None, rate=50000, order=None, colour=None):
         self.Posts[id] = JointAnimation(points, edges, fps, audio, rate, order, colour,
