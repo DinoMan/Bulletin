@@ -583,6 +583,9 @@ class AdjustableParameter():
     def update(self, value):
         self.value = float(value)
 
+    def scale(self, scale):
+        self.value = scale * self.value
+
 
 class Bulletin():
     def __init__(self, server='http://localhost', save_path='.', env='main', ffmpeg_experimental=False, username=None, password=None,
