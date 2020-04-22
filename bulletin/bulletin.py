@@ -193,6 +193,9 @@ class Plot():
                    win=id)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
@@ -268,6 +271,8 @@ class Graph:
         self.y_batch = np.array([])
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
@@ -301,7 +306,10 @@ class Image:
         board.image(self.img, opts=dict(title=id), win=id)
 
     def Save(self, path, name):
-        cv2.imwrite(path + '/' + name + '.jpg', np.rollaxis(self.img, 0, 3))
+        if self.img.ndim == 2:
+            cv2.imwrite(path + '/' + name + '.jpg', self.img)
+        else:
+            cv2.imwrite(path + '/' + name + '.jpg', cv2.cvtColor(np.rollaxis(self.img, 0, 3), cv2.COLOR_RGB2BGR))
 
 
 class Table:
@@ -521,6 +529,9 @@ class JointAnimation():
         board.video(videofile=full_path, win=id, opts=opts)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         width = int(self.max_canvas[0] - self.min_canvas[0])
         height = int(self.max_canvas[1] - self.min_canvas[1])
 
