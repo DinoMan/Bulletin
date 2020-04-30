@@ -271,8 +271,12 @@ class Graph:
         self.y_batch = np.array([])
 
     def Save(self, path, name):
+        if self.x is None:
+            return
+
         if not os.path.exists(path):
             os.makedirs(path)
+
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + self.labels)
