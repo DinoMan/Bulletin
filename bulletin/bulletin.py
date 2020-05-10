@@ -33,6 +33,15 @@ FACE_EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8
               (66, 67), (67, 60)]  # inner mouth
 
 
+# Base class used for type filtering
+class Post():
+    def __init__(self, types=None):
+        if types is None:
+            self.types = {}
+        else:
+            self.types = types
+
+
 def swp_extension(file, ext):
     return os.path.splitext(file)[0] + ext
 
@@ -44,9 +53,10 @@ def filify(string):
     return filename
 
 
-class Scatter:
+class Scatter(Post):
     def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=10,
                  iterations=2000, filter_name=None):
+        super().__init__(types={"charts"})
         self.no_points = datapoints.shape[0]
         self.label_mapping = {}
         self.labels = labels
@@ -115,8 +125,9 @@ class Scatter:
         pass
 
 
-class Histogram:
+class Histogram(Post):
     def __init__(self, x, numbins=20, axis_x=None, axis_y=None):
+        super().__init__(types={"charts"})
         self.x = x
         self.numbins = numbins
 
@@ -142,6 +153,9 @@ class Histogram:
                         win=id)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow([self.axis_x] + id)
@@ -152,8 +166,9 @@ class Histogram:
                 line_writer.writerow([bin_location] + hist[csv_line])
 
 
-class Plot():
+class Plot(Post):
     def __init__(self, labels, y, x=None, axis_x=None, axis_y=None):
+        super().__init__(types={"charts"})
         if hasattr(y, '__iter__'):
             max_len = len(max(y, key=len))
             l = []
@@ -203,8 +218,9 @@ class Plot():
                 line_writer.writerow(np.append([self.x[csv_line]], self.y[csv_line, :]))
 
 
-class Graph:
+class Graph(Post):
     def __init__(self, labels, axis_x=None, axis_y=None, window=-1):
+        super().__init__(types={"charts"})
         self.x = None
         self.y = None
         self.window = window
@@ -293,8 +309,9 @@ class Graph:
         self.x_batch = np.append(self.x_batch, x)
 
 
-class Image:
+class Image(Post):
     def __init__(self, img, scale=1.0):
+        super().__init__(types={"multimedia"})
         img = np.squeeze(255 * img).astype(np.uint8)
         if scale is None:
             self.img = img
@@ -310,14 +327,18 @@ class Image:
         board.image(self.img, opts=dict(title=id), win=id)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         if self.img.ndim == 2:
             cv2.imwrite(path + '/' + name + '.jpg', self.img)
         else:
             cv2.imwrite(path + '/' + name + '.jpg', cv2.cvtColor(np.rollaxis(self.img, 0, 3), cv2.COLOR_RGB2BGR))
 
 
-class Table:
+class Table(Post):
     def __init__(self, headers, table_data=[]):
+        super().__init__(types={"parameters"})
         self.headers = headers
         self.table = table_data
 
@@ -338,6 +359,9 @@ class Table:
         board.text(htmlcode, win=id)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
             line_writer.writerow(self.headers)
@@ -346,8 +370,9 @@ class Table:
         pass
 
 
-class Audio():
+class Audio(Post):
     def __init__(self, audio=np.array([]), rate=50000, spectrogram=False):
+        super().__init__(types={"multimedia"})
         self.audio = ((2 ** 15) * audio).astype(np.int16)
         self.rate = rate
         self.spectrogram = spectrogram
@@ -364,6 +389,9 @@ class Audio():
             self._post_spectrogram_(board, id)
 
     def Save(self, path, name):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         wav.write(path + '/' + name + ".wav", self.rate, self.audio)
 
     def _post_spectrogram_(self, board, id):
@@ -373,8 +401,9 @@ class Audio():
         board.heatmap(X=self.Sxx, opts=time_freq_map, win=spectrogram_id)
 
 
-class Video:
+class Video(Post):
     def __init__(self, video=np.array([]), fps=25, audio=None, rate=50000, ffmpeg_experimental=False):
+        super().__init__(types={"multimedia"})
         if video.size == 0:
             self.video = []
         else:
@@ -455,9 +484,10 @@ class Video:
         return success
 
 
-class JointAnimation():
+class JointAnimation(Post):
     def __init__(self, points=np.array([]), edges=[], fps=25, audio=None, rate=50000,
                  order=None, colour=None, ffmpeg_experimental=False):
+        super().__init__(types={"multimedia"})
         self.points = points.copy()
         if edges == "face":
             self.edges = FACE_EDGES
@@ -702,11 +732,12 @@ class Bulletin():
             else:
                 del self.Posts[post]
 
-    def SaveState(self, save_path=None):
+    def SaveState(self, save_path=None, filter=None):
         if save_path is None:
             save_path = self.save_path
         for post in self.Posts:
             if post != None:
-                self.Posts[post].Save(save_path, filify(post))
+                if filter is None or bool(self.Posts[post].types.intersection(filter)) :
+                    self.Posts[post].Save(save_path, filify(post))
             else:
                 del self.Posts[post]
