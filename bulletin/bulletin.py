@@ -310,8 +310,9 @@ class Graph(Post):
 
 
 class Images(Post):
-    def __init__(self, imgs, scale=1.0):
+    def __init__(self, imgs, scale=1.0, group=0):
         super().__init__(types={"multimedia"})
+        self.group = len(imgs) // group
         self.imgs = []
         for img in imgs:
             img = np.squeeze(255 * img).astype(np.uint8)
@@ -325,7 +326,10 @@ class Images(Post):
                                                                                      int(scale * np.squeeze(img).shape[2]))), 0, 2))
 
     def _Post(self, board, id):
-        board.images(self.imgs, opts=dict(title=id), win=id)
+        if self.group > 0:
+            board.images(self.imgs, opts=dict(title=id), win=id, nrow=self.group)
+        else:
+            board.images(self.imgs, opts=dict(title=id), win=id)
 
     def Save(self, path, name):
         folder_path = path + '/' + name
@@ -334,9 +338,9 @@ class Images(Post):
 
         for idx, img in enumerate(self.imgs):
             if img.ndim == 2:
-                cv2.imwrite(folder_path + '/' + idx + '.jpg', img)
+                cv2.imwrite(folder_path + '/' + str(idx) + '.jpg', img)
             else:
-                cv2.imwrite(folder_path + '/' + idx + '.jpg', cv2.cvtColor(np.rollaxis(img, 0, 3), cv2.COLOR_RGB2BGR))
+                cv2.imwrite(folder_path + '/' + str(idx) + '.jpg', cv2.cvtColor(np.rollaxis(img, 0, 3), cv2.COLOR_RGB2BGR))
 
 
 class Image(Post):
@@ -723,8 +727,8 @@ class Bulletin():
         self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
-    def CreateImageList(self, id, images, scale=1.0):
-        self.Posts[id] = Images(images, scale=scale)
+    def CreateImageList(self, id, images, scale=1.0, group=0):
+        self.Posts[id] = Images(images, scale=scale, group=group)
         return self.Posts[id]
 
     def CreateAudio(self, id, audio, rate=50000, spectrogram=False):
