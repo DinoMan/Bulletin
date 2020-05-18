@@ -309,6 +309,36 @@ class Graph(Post):
         self.x_batch = np.append(self.x_batch, x)
 
 
+class Images(Post):
+    def __init__(self, imgs, scale=1.0):
+        super().__init__(types={"multimedia"})
+        self.imgs = []
+        for img in imgs:
+            img = np.squeeze(255 * img).astype(np.uint8)
+            if scale is None:
+                self.imgs.append(img)
+            else:
+                if img.ndim == 2:
+                    self.imgs.append(cv2.resize(img, (int(scale * img.shape[0]), int(scale * np.squeeze(img).shape[1]))))
+                else:
+                    self.imgs.append(np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]),
+                                                                                     int(scale * np.squeeze(img).shape[2]))), 0, 2))
+
+    def _Post(self, board, id):
+        board.images(self.imgs, opts=dict(title=id), win=id)
+
+    def Save(self, path, name):
+        folder_path = path + '/' + name
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        for idx, img in enumerate(self.imgs):
+            if img.ndim == 2:
+                cv2.imwrite(folder_path + '/' + idx + '.jpg', img)
+            else:
+                cv2.imwrite(folder_path + '/' + idx + '.jpg', cv2.cvtColor(np.rollaxis(img, 0, 3), cv2.COLOR_RGB2BGR))
+
+
 class Image(Post):
     def __init__(self, img, scale=1.0):
         super().__init__(types={"multimedia"})
@@ -693,6 +723,10 @@ class Bulletin():
         self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
+    def CreateImageList(self, id, images, scale=1.0):
+        self.Posts[id] = Images(images, scale=scale)
+        return self.Posts[id]
+
     def CreateAudio(self, id, audio, rate=50000, spectrogram=False):
         self.Posts[id] = Audio(audio, rate, spectrogram=spectrogram)
         return self.Posts[id]
@@ -737,7 +771,7 @@ class Bulletin():
             save_path = self.save_path
         for post in self.Posts:
             if post != None:
-                if filter is None or bool(self.Posts[post].types.intersection(filter)) :
+                if filter is None or bool(self.Posts[post].types.intersection(filter)):
                     self.Posts[post].Save(save_path, filify(post))
             else:
                 del self.Posts[post]
