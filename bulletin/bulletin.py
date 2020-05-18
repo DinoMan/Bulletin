@@ -312,7 +312,7 @@ class Graph(Post):
 class Images(Post):
     def __init__(self, imgs, scale=1.0, group=1):
         super().__init__(types={"multimedia"})
-        self.group = imgs // group
+        self.group = len(imgs) // group
         self.imgs = []
         for img in imgs:
             img = np.squeeze(255 * img).astype(np.uint8)
