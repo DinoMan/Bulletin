@@ -727,7 +727,7 @@ class Bulletin():
         self.Posts[id] = Image(image, scale=scale)
         return self.Posts[id]
 
-    def CreateImageList(self, id, images, scale=1.0, group=0):
+    def CreateImageList(self, id, images, scale=1.0, group=1):
         self.Posts[id] = Images(images, scale=scale, group=group)
         return self.Posts[id]
 
