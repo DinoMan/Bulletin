@@ -8,6 +8,7 @@ import menpo
 import os
 import tempfile
 import cv2
+import math
 
 try:
     from .html_table import table
@@ -36,6 +37,7 @@ FACE_EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8
 # Base class used for type filtering
 class Post():
     def __init__(self, types=None):
+        self.win = None
         if types is None:
             self.types = {}
         else:
@@ -54,16 +56,18 @@ def filify(string):
 
 
 class Scatter(Post):
-    def __init__(self, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=10,
-                 iterations=2000, filter_name=None):
+    def __init__(self, id, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=10, iterations=2000, filter_name=None,
+                 board=None):
         super().__init__(types={"charts"})
+        self.id = id
+        self.board = board
         self.no_points = datapoints.shape[0]
         self.label_mapping = {}
         self.labels = labels
         self.names = None
         self.filter_name = filter_name
 
-        self.ChangeLabelling(labels)
+        self.change_labelling(labels)
 
         self.sequence_coloring = sequence_coloring
         if t_sne:
@@ -72,7 +76,7 @@ class Scatter(Post):
         else:
             self.datapoints = datapoints
 
-    def ChangeLabelling(self, labels, filter_name=None):
+    def change_labelling(self, labels, filter_name=None):
         self.label_mapping = {}
         self.labels = labels
         self.names = None
@@ -90,47 +94,51 @@ class Scatter(Post):
         self.labels = list(map(self.label_mapping.get, self.labels))
         self.names = list(sorted(self.label_mapping, key=self.label_mapping.__getitem__))
 
-    def _Post(self, board, id):
-        win_name = id
+    def post(self):
+        if self.board is None:
+            return
+
+        win_name = self.id
         if self.filter_name is not None:
             win_name += "Filtered by: " + self.filter_name
 
         if self.labels is None:
             if self.sequence_coloring:
                 colors = 255 * (cm.coolwarm(np.arange(0, 1, step=1.0 / self.no_points))[:, :3])
-            board.scatter(X=self.datapoints,
-                          opts=dict(title=id,
-                                    markercolor=colors.astype(int),
-                                    markersize=5,
-                                    ),
-                          win=win_name)
+            self.board.scatter(X=self.datapoints,
+                               opts=dict(title=self.id,
+                                         markercolor=colors.astype(int),
+                                         markersize=5,
+                                         ),
+                               win=win_name)
         else:
             if self.names is not None:
-                board.scatter(X=self.datapoints,
-                              Y=self.labels,
-                              opts=dict(title=win_name,
-                                        legend=self.names,
-                                        markersize=5,
-                                        ),
-                              win=win_name)
+                self.board.scatter(X=self.datapoints,
+                                   Y=self.labels,
+                                   opts=dict(title=win_name,
+                                             legend=self.names,
+                                             markersize=5,
+                                             ),
+                                   win=win_name)
             else:
-                board.scatter(X=self.datapoints,
-                              Y=self.labels,
-                              opts=dict(title=win_name,
-                                        markersize=5,
-                                        ),
-                              win=win_name)
+                self.board.scatter(X=self.datapoints,
+                                   Y=self.labels,
+                                   opts=dict(title=win_name,
+                                             markersize=5,
+                                             ),
+                                   win=win_name)
 
     def Save(self, path, name):
         pass
 
 
 class Histogram(Post):
-    def __init__(self, x, numbins=20, axis_x=None, axis_y=None):
+    def __init__(self, id, x, numbins=20, axis_x=None, axis_y=None, board=None):
         super().__init__(types={"charts"})
+        self.id = id
         self.x = x
         self.numbins = numbins
-
+        self.board = board
         if not axis_x:
             self.axis_x = "X"
         else:
@@ -141,16 +149,16 @@ class Histogram(Post):
         else:
             self.axis_y = axis_y
 
-    def _Post(self, board, id):
-        if self.x.size <= 1:
+    def post(self):
+        if self.board is None or self.x.size <= 1:
             return
 
-        board.histogram(X=self.x,
-                        opts={'title': id,
-                              'numbins': self.numbins,
-                              'xlabel': self.axis_x,
-                              'ylabel': self.axis_y},
-                        win=id)
+        self.board.histogram(X=self.x,
+                             opts={'title': self.id,
+                                   'numbins': self.numbins,
+                                   'xlabel': self.axis_x,
+                                   'ylabel': self.axis_y},
+                             win=self.id)
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -158,7 +166,7 @@ class Histogram(Post):
 
         with open(path + "/" + name + '.csv', 'w') as csvfile:
             line_writer = csv.writer(csvfile, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
-            line_writer.writerow([self.axis_x] + id)
+            line_writer.writerow([self.axis_x] + self.id)
             bin_location = self.x.min()
             hist = np.histogram(self.x, bins=self.numbins)
 
@@ -167,8 +175,10 @@ class Histogram(Post):
 
 
 class Plot(Post):
-    def __init__(self, labels, y, x=None, axis_x=None, axis_y=None):
+    def __init__(self, id, labels, y, x=None, axis_x=None, axis_y=None, board=None):
         super().__init__(types={"charts"})
+        self.id = id
+        self.board = board
         if hasattr(y, '__iter__'):
             max_len = len(max(y, key=len))
             l = []
@@ -197,15 +207,17 @@ class Plot(Post):
         else:
             self.axis_y = axis_y
 
-    def _Post(self, board, id):
+    def post(self):
+        if self.board is None:
+            return
 
-        board.line(Y=self.y,
-                   X=self.x,
-                   opts={'title': id,
-                         'legend': self.labels,
-                         'xlabel': self.axis_x,
-                         'ylabel': self.axis_y},
-                   win=id)
+        self.board.line(Y=self.y,
+                        X=self.x,
+                        opts={'title': self.id,
+                              'legend': self.labels,
+                              'xlabel': self.axis_x,
+                              'ylabel': self.axis_y},
+                        win=self.id)
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -219,8 +231,10 @@ class Plot(Post):
 
 
 class Graph(Post):
-    def __init__(self, labels, axis_x=None, axis_y=None, window=-1):
+    def __init__(self, id, labels, axis_x=None, axis_y=None, window=-1, board=None):
         super().__init__(types={"charts"})
+        self.id = id
+        self.board = board
         self.x = None
         self.y = None
         self.window = window
@@ -244,8 +258,8 @@ class Graph(Post):
         self.x = None
         self.y = None
 
-    def _Post(self, board, id):
-        if self.x_batch.size <= 2:
+    def post(self):
+        if self.board is None or self.x_batch.size <= 2:
             return
 
         if self.x is None:
@@ -256,13 +270,13 @@ class Graph(Post):
                 self.y = self.y[-self.window:, :]
                 self.x = self.x[-self.window:]
 
-            board.line(Y=self.y.squeeze(),
-                       X=self.x,
-                       opts={'title': id,
-                             'legend': self.labels,
-                             'xlabel': self.axis_x,
-                             'ylabel': self.axis_y},
-                       win=id)
+            self.board.line(Y=self.y.squeeze(),
+                            X=self.x,
+                            opts={'title': self.id,
+                                  'legend': self.labels,
+                                  'xlabel': self.axis_x,
+                                  'ylabel': self.axis_y},
+                            win=self.id)
         else:
             self.y = np.vstack([self.y, self.y_batch])
             self.x = np.append(self.x, self.x_batch)
@@ -270,18 +284,18 @@ class Graph(Post):
             if self.window > 0 and self.x.shape[0] >= self.window:
                 self.y = self.y[-self.window:, :]
                 self.x = self.x[-self.window:]
-                board.line(Y=self.y.squeeze(),
-                           X=self.x,
-                           opts={'title': id,
-                                 'legend': self.labels,
-                                 'xlabel': self.axis_x,
-                                 'ylabel': self.axis_y},
-                           win=id)
+                self.board.line(Y=self.y.squeeze(),
+                                X=self.x,
+                                opts={'title': self.id,
+                                      'legend': self.labels,
+                                      'xlabel': self.axis_x,
+                                      'ylabel': self.axis_y},
+                                win=self.id)
             else:
-                board.line(Y=self.y_batch.squeeze(),
-                           X=self.x_batch,
-                           win=id,
-                           update='append')
+                self.board.line(Y=self.y_batch.squeeze(),
+                                X=self.x_batch,
+                                win=self.id,
+                                update='append')
 
         self.x_batch = np.array([])
         self.y_batch = np.array([])
@@ -310,8 +324,10 @@ class Graph(Post):
 
 
 class Images(Post):
-    def __init__(self, imgs, scale=1.0, group=1):
+    def __init__(self, id, imgs, scale=1.0, group=1, board=None):
         super().__init__(types={"multimedia"})
+        self.id = id
+        self.board = board
         self.group = len(imgs) // group
         self.imgs = []
         for img in imgs:
@@ -325,11 +341,13 @@ class Images(Post):
                     self.imgs.append(np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]),
                                                                                      int(scale * np.squeeze(img).shape[2]))), 0, 2))
 
-    def _Post(self, board, id):
+    def post(self):
+        if self.board is None:
+            return
         if self.group > 0:
-            board.images(self.imgs, opts=dict(title=id), win=id, nrow=self.group)
+            self.board.images(self.imgs, opts=dict(title=self.id), win=self.id, nrow=self.group)
         else:
-            board.images(self.imgs, opts=dict(title=id), win=id)
+            self.board.images(self.imgs, opts=dict(title=self.id), win=self.id)
 
     def Save(self, path, name):
         folder_path = path + '/' + name
@@ -343,9 +361,67 @@ class Images(Post):
                 cv2.imwrite(folder_path + '/' + str(idx) + '.jpg', cv2.cvtColor(np.rollaxis(img, 0, 3), cv2.COLOR_RGB2BGR))
 
 
-class Image(Post):
-    def __init__(self, img, scale=1.0):
+class ImageAttentionMap(Post):
+    def __init__(self, id, img, attention, focus=(0, 0), scale=1.0, board=None):
+        self.id = id
         super().__init__(types={"multimedia"})
+        self.board = board
+        img = np.squeeze(255 * img).astype(np.uint8)
+        attn_feature_scale = int(math.sqrt((img.shape[-2] * img.shape[-1]) // attention.shape[-1]))
+        self.scale = scale
+        self.feature_height = img.shape[-2] // attn_feature_scale
+        self.feature_width = img.shape[-1] // attn_feature_scale
+
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+
+        self.img = cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[-2]), int(scale * np.squeeze(img).shape[-1])))
+
+        self.attention_map = attention.reshape(self.feature_height, self.feature_width, self.feature_height, self.feature_width)
+
+        self.pixel_focus = [focus[0], focus[1]]
+
+    def _draw_attention_(self):
+        heatmap_x = int(self.pixel_focus[0] * (self.feature_width - 1))
+        heatmap_y = int(self.pixel_focus[1] * (self.feature_height - 1))
+
+        pixel_coord = (int(self.pixel_focus[0] * (self.img.shape[0] - 1)), int(self.pixel_focus[1] * (self.img.shape[1] - 1)))
+
+        heatmap = cv2.cvtColor(cv2.applyColorMap(cv2.resize((255 * self.attention_map[heatmap_x, heatmap_y]).astype(np.uint8),
+                                                            (int(self.img.shape[0]), int(self.img.shape[1]))), cv2.COLORMAP_JET), cv2.COLOR_RGB2BGR)
+
+        overlayed = heatmap * 0.5 + self.img * 0.5
+        overlayed = cv2.circle(overlayed, pixel_coord, 2, (0, 0, 0), thickness=3)
+        return np.swapaxes(overlayed, 0, 2)
+
+    def update(self, event):
+        if event['event_type'] == 'Click':
+            self.pixel_focus[0] = max(min(event['image_coord']['y'], event['pane_data']['width']), 0) / event['pane_data']['width']
+            self.pixel_focus[1] = max(min(event['image_coord']['x'], event['pane_data']['height']), 0) / event['pane_data']['height']
+
+        overlayed_img = self._draw_attention_()
+        self.board.image(overlayed_img, opts=dict(title=self.id), win=self.id)
+
+    def post(self):
+        if self.board is None or self.img.size == 0:
+            return
+
+        overlayed_img = self._draw_attention_()
+        win = self.board.image(overlayed_img, opts=dict(title=self.id), win=self.id)
+
+        if self.win is None:  # If we have not registered the callback do it now
+            self.board.register_event_handler(self.update, win)
+            self.win = win
+
+    def Save(self, path, name):
+        pass
+
+
+class Image(Post):
+    def __init__(self, id, img, scale=1.0, board=None):
+        super().__init__(types={"multimedia"})
+        self.id = id
+        self.board = board
         img = np.squeeze(255 * img).astype(np.uint8)
         if scale is None:
             self.img = img
@@ -355,10 +431,10 @@ class Image(Post):
             else:
                 self.img = np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]), int(scale * np.squeeze(img).shape[2]))), 0, 2)
 
-    def _Post(self, board, id):
-        if self.img.size == 0:
+    def post(self):
+        if self.board is None or self.img.size == 0:
             return
-        board.image(self.img, opts=dict(title=id), win=id)
+        self.board.image(self.img, opts=dict(title=self.id), win=self.id)
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -371,8 +447,10 @@ class Image(Post):
 
 
 class Table(Post):
-    def __init__(self, headers, table_data=[]):
+    def __init__(self, id, headers, table_data=[], board=None):
         super().__init__(types={"parameters"})
+        self.id = id
+        self.board = board
         self.headers = headers
         self.table = table_data
 
@@ -388,9 +466,12 @@ class Table(Post):
         else:
             self.table.append(row)
 
-    def _Post(self, board, id):
+    def post(self):
+        if self.board is None:
+            return
+
         htmlcode = table(self.table, header_row=self.headers, style="width:100%")
-        board.text(htmlcode, win=id)
+        self.board.text(htmlcode, win=self.id)
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -405,22 +486,26 @@ class Table(Post):
 
 
 class Audio(Post):
-    def __init__(self, audio=np.array([]), rate=50000, spectrogram=False):
+    def __init__(self, id, audio=np.array([]), rate=50000, spectrogram=False, board=None):
         super().__init__(types={"multimedia"})
+        self.id = id
+        self.board = board
         self.audio = ((2 ** 15) * audio).astype(np.int16)
         self.rate = rate
         self.spectrogram = spectrogram
         if self.spectrogram:
             self.freq, self.sample_time, self.Sxx = signal.spectrogram(self.audio, self.rate)
 
-    def _Post(self, board, id):
-        temp_file = filify(board.env) + "_" + filify(id)
+    def post(self):
+        if self.board is None:
+            return
+        temp_file = filify(self.board.env) + "_" + filify(self.id)
         self.Save("/tmp", temp_file)
         full_path = "/tmp/" + temp_file + '.wav'
         opts = dict(sample_frequency=self.rate)
-        board.audio(audiofile=full_path, win=id, opts=opts)
+        self.board.audio(audiofile=full_path, win=self.id, opts=opts)
         if self.spectrogram:
-            self._post_spectrogram_(board, id)
+            self.post_spectrogram()
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -428,16 +513,20 @@ class Audio(Post):
 
         wav.write(path + '/' + name + ".wav", self.rate, self.audio)
 
-    def _post_spectrogram_(self, board, id):
-        spectrogram_id = "Spectrogram of " + id
-        time_freq_map = {"rownames": self.freq.tolist(), "columnnames": self.sample_time.tolist(),
-                         "title": spectrogram_id}
-        board.heatmap(X=self.Sxx, opts=time_freq_map, win=spectrogram_id)
+    def post_spectrogram(self):
+        if self.board is None:
+            return
+
+        spectrogram_id = "Spectrogram of " + self.id
+        time_freq_map = {"rownames": self.freq.tolist(), "columnnames": self.sample_time.tolist(), "title": spectrogram_id}
+        self.board.heatmap(X=self.Sxx, opts=time_freq_map, win=spectrogram_id)
 
 
 class Video(Post):
-    def __init__(self, video=np.array([]), fps=25, audio=None, rate=50000, ffmpeg_experimental=False):
+    def __init__(self, id, video=np.array([]), fps=25, audio=None, rate=50000, ffmpeg_experimental=False, board=None):
         super().__init__(types={"multimedia"})
+        self.id = id
+        self.board = board
         if video.size == 0:
             self.video = []
         else:
@@ -461,18 +550,18 @@ class Video(Post):
     def AddFrame(self, frame):
         self.video.append(frame)
 
-    def _Post(self, board, id):
-        if len(self.video) < 1:
+    def post(self):
+        if self.board is None or len(self.video) < 1:
             return
 
-        temp_file = filify(board.env) + "_" + filify(id)
+        temp_file = filify(self.board.env) + "_" + filify(self.id)
         if not self.Save("/tmp", temp_file):
             return
 
         full_path = "/tmp/" + temp_file + '.mp4'
 
         opts = dict(fps=self.fps)
-        board.video(videofile=full_path, win=id, opts=opts)
+        self.board.video(videofile=full_path, win=self.id, opts=opts)
 
     def Save(self, path, name, gif=False, extension=".mp4"):
         success = True
@@ -519,9 +608,11 @@ class Video(Post):
 
 
 class JointAnimation(Post):
-    def __init__(self, points=np.array([]), edges=[], fps=25, audio=None, rate=50000,
-                 order=None, colour=None, ffmpeg_experimental=False):
+    def __init__(self, id, points=np.array([]), edges=[], fps=25, audio=None, rate=50000, order=None, colour=None, ffmpeg_experimental=False,
+                 board=None):
         super().__init__(types={"multimedia"})
+        self.id = id
+        self.board = board
         self.points = points.copy()
         if edges == "face":
             self.edges = FACE_EDGES
@@ -586,15 +677,18 @@ class JointAnimation(Post):
         self.points = seq_landmarks
         self._perform_checks_()
 
-    def _Post(self, board, id):
-        temp_file = filify(board.env) + "_" + filify(id)
+    def post(self):
+        if self.board is None:
+            return
+
+        temp_file = filify(self.board.env) + "_" + filify(self.id)
         if not self.Save("/tmp", temp_file):
             return
 
         full_path = "/tmp/" + temp_file + '.mp4'
 
         opts = dict(fps=self.fps)
-        board.video(videofile=full_path, win=id, opts=opts)
+        self.board.video(videofile=full_path, win=self.id, opts=opts)
 
     def Save(self, path, name):
         if not os.path.exists(path):
@@ -719,54 +813,60 @@ class Bulletin():
         return self.controlled_variables[-1]
 
     def create_joint_animation(self, id, points, edges=None, fps=25, audio=None, rate=50000, order=None, colour=None):
-        self.Posts[id] = JointAnimation(points, edges, fps, audio, rate, order, colour,
-                                        ffmpeg_experimental=self.ffmpeg_experimental)
+        self.Posts[id] = JointAnimation(id, points, edges, fps, audio, rate, order, colour, ffmpeg_experimental=self.ffmpeg_experimental,
+                                        board=self.vis)
+        return self.Posts[id]
+
+    def create_image_attention(self, id, image, attention, scale=1.0, focus=(0, 0)):
+        if id in self.Posts.keys():
+            self.vis.clear_event_handlers(self.Posts[id].win)
+
+        self.Posts[id] = ImageAttentionMap(id, image, attention, focus=focus, scale=scale, board=self.vis)
         return self.Posts[id]
 
     def CreateImage(self, id, image, scale=1.0):
-        self.Posts[id] = Image(image, scale=scale)
+        self.Posts[id] = Image(id, image, scale=scale, board=self.vis)
         return self.Posts[id]
 
     def CreateImageList(self, id, images, scale=1.0, group=1):
-        self.Posts[id] = Images(images, scale=scale, group=group)
+        self.Posts[id] = Images(id, images, scale=scale, group=group, board=self.vis)
         return self.Posts[id]
 
     def CreateAudio(self, id, audio, rate=50000, spectrogram=False):
-        self.Posts[id] = Audio(audio, rate, spectrogram=spectrogram)
+        self.Posts[id] = Audio(id, audio, rate, spectrogram=spectrogram, board=self.vis)
         return self.Posts[id]
 
     def CreateVideo(self, id, video=np.array([]), fps=25, audio=None, rate=50000):
-        self.Posts[id] = Video(video, fps, audio, rate, ffmpeg_experimental=self.ffmpeg_experimental)
+        self.Posts[id] = Video(id, video, fps, audio, rate, ffmpeg_experimental=self.ffmpeg_experimental, board=self.vis)
         return self.Posts[id]
 
     def CreateTable(self, id, headers, table_data=[]):
-        self.Posts[id] = Table(headers, table_data)
+        self.Posts[id] = Table(id, headers, table_data, board=self.vis)
         return self.Posts[id]
 
     def CreatePlot(self, id, labels, y, x=None, axis_x=None, axis_y=None):
-        self.Posts[id] = Plot(labels, y, x, axis_x, axis_y)
+        self.Posts[id] = Plot(id, labels, y, x, axis_x, axis_y, board=self.vis)
         return
 
     def CreateGraph(self, id, labels, axis_x=None, axis_y=None, window=-1):
-        self.Posts[id] = Graph(labels, axis_x, axis_y, window)
+        self.Posts[id] = Graph(id, labels, axis_x, axis_y, window, board=self.vis)
         return self.Posts[id]
 
     def CreateHistogram(self, id, x, numbins=20, axis_x=None, axis_y=None):
-        self.Posts[id] = Histogram(x, numbins, axis_x, axis_y)
+        self.Posts[id] = Histogram(id, x, numbins, axis_x, axis_y, board=self.vis)
         return self.Posts[id]
 
-    def CreateScatterPlot(self, id, datapoints, labels=None, sequence_coloring=True, t_sne=False,
-                          perplexity=30, iterations=10000):
-        self.Posts[id] = Scatter(datapoints, labels, sequence_coloring, t_sne, perplexity, iterations)
+    def CreateScatterPlot(self, id, datapoints, labels=None, sequence_coloring=True, t_sne=False, perplexity=30, iterations=10000):
+        self.Posts[id] = Scatter(id, datapoints, labels, sequence_coloring, t_sne, perplexity, iterations, board=self.vis)
         return self.Posts[id]
 
     def Post(self):
-        for post in self.Posts:
-            if post != None:
+        for post_id in self.Posts:
+            if post_id != None:
                 try:
-                    self.Posts[post]._Post(self.vis, post)
-                except:
-                    warnings.warn("Couldn't post to bulletin", RuntimeWarning)
+                    self.Posts[post_id].post()
+                except Exception as e:
+                    warnings.warn("Couldn't post to bulletin: " + str(e), RuntimeWarning)
             else:
                 del self.Posts[post]
 
