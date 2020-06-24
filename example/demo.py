@@ -9,10 +9,10 @@ imgs = []
 imgs.append(np.rollaxis(cv2.cvtColor(cv2.imread('data/1.jpg', cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB) / 255.0, 2, 0))
 imgs.append(np.rollaxis(cv2.cvtColor(cv2.imread('data/2.jpg', cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB) / 255.0, 2, 0))
 
-pixel_attentions = []
-for i in range(16):
-    pixel_attentions += [np.clip(i / 16 * np.arange(0, 1, 1 / (16)), 0, 1)]
-attention = np.vstack(pixel_attentions)
+attention = np.zeros([1024, 1024])
+for i in range(1024):
+    for j in range(1024):
+        attention[i, j] = i / 512 + j / 512
 
 cap = cv2.VideoCapture('data/video.mp4')
 frameCount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -36,8 +36,8 @@ board.CreateImage("image", imgs[0])
 board.CreateVideo("video", video, audio=audio)
 
 graph = board.CreateGraph("Graph", ["1st quantity", "2nd quantity"], axis_x="iteration", axis_y="value")
-for i in range(20):
+for i in range(2):
     board.create_image_attention("attention", imgs[i % 2], attention)
     graph.AddPoint(i, [i, 2 * i])
     board.Post()
-    time.sleep(1)
+    time.sleep(20)

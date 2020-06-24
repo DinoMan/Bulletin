@@ -336,10 +336,10 @@ class Images(Post):
                 self.imgs.append(img)
             else:
                 if img.ndim == 2:
-                    self.imgs.append(cv2.resize(img, (int(scale * img.shape[0]), int(scale * np.squeeze(img).shape[1]))))
+                    self.imgs.append(cv2.resize(img, (int(scale * img.shape[-1]), int(scale * np.squeeze(img).shape[-2]))))
                 else:
-                    self.imgs.append(np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]),
-                                                                                     int(scale * np.squeeze(img).shape[2]))), 0, 2))
+                    self.imgs.append(np.rollaxis(cv2.resize(np.rollaxis(img, 0, 3), (int(scale * img.shape[-1]),
+                                                                                     int(scale * np.squeeze(img).shape[-2]))), 2))
 
     def post(self):
         if self.board is None:
@@ -362,37 +362,50 @@ class Images(Post):
 
 
 class ImageAttentionMap(Post):
-    def __init__(self, id, img, attention, focus=(0, 0), scale=1.0, board=None):
+    def __init__(self, id, img, attention, focus=(0, 0), scale=1.0, board=None, alpha=0.5, increase_contrast=False):
         self.id = id
         super().__init__(types={"multimedia"})
         self.board = board
-        img = np.squeeze(255 * img).astype(np.uint8)
+        self.img = np.squeeze(255 * img).astype(np.uint8)
+        self.alpha = alpha
+
         attn_feature_scale = int(math.sqrt((img.shape[-2] * img.shape[-1]) // attention.shape[-1]))
         self.scale = scale
         self.feature_height = img.shape[-2] // attn_feature_scale
         self.feature_width = img.shape[-1] // attn_feature_scale
 
         if img.ndim == 2:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            self.img = cv2.cvtColor(self.img, cv2.COLOR_GRAY2BGR)
+        else:
+            self.img = np.rollaxis(self.img, 0, 3)  # Convert to opencv format H x W x C
 
-        self.img = cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[-2]), int(scale * np.squeeze(img).shape[-1])))
+        if scale != 1:
+            self.img = cv2.resize(self.img, (int(scale * img.shape[-3]), int(scale * img.shape[-2])))  # In this case we store in opencv format H x W x C
 
-        self.attention_map = attention.reshape(self.feature_height, self.feature_width, self.feature_height, self.feature_width)
+
+        if increase_contrast:
+            row_sums = attention.max(axis=1)
+            att = attention / row_sums[:, np.newaxis]
+        else:
+            att = attention
+
+        self.attention_map = att.reshape(self.feature_height, self.feature_width, self.feature_height, self.feature_width)
 
         self.pixel_focus = [focus[0], focus[1]]
 
     def _draw_attention_(self):
-        heatmap_x = int(self.pixel_focus[0] * (self.feature_width - 1))
-        heatmap_y = int(self.pixel_focus[1] * (self.feature_height - 1))
+        heatmap_row = int(self.pixel_focus[0] * (self.feature_height - 1))
+        heatmap_col = int(self.pixel_focus[1] * (self.feature_width - 1))
 
-        pixel_coord = (int(self.pixel_focus[0] * (self.img.shape[0] - 1)), int(self.pixel_focus[1] * (self.img.shape[1] - 1)))
+        pixel_coord = (int(self.pixel_focus[1] * (self.img.shape[1] - 1)), int(self.pixel_focus[0] * (self.img.shape[0] - 1)))
 
-        heatmap = cv2.cvtColor(cv2.applyColorMap(cv2.resize((255 * self.attention_map[heatmap_x, heatmap_y]).astype(np.uint8),
-                                                            (int(self.img.shape[0]), int(self.img.shape[1]))), cv2.COLORMAP_JET), cv2.COLOR_RGB2BGR)
+        heatmap = cv2.applyColorMap(cv2.resize((255 * self.attention_map[heatmap_row, heatmap_col]).astype(np.uint8),
+                                               (int(self.img.shape[-3]), int(self.img.shape[-2]))), cv2.COLORMAP_TURBO)
 
-        overlayed = heatmap * 0.5 + self.img * 0.5
-        overlayed = cv2.circle(overlayed, pixel_coord, 2, (0, 0, 0), thickness=3)
-        return np.swapaxes(overlayed, 0, 2)
+
+        overlayed = heatmap * self.alpha + self.img * (1-self.alpha)
+        overlayed = cv2.circle(overlayed, pixel_coord, 2, (0, 0, 0), thickness=1)
+        return np.rollaxis(cv2.cvtColor(overlayed.astype(np.uint8), cv2.COLOR_BGR2RGB), 2) # Now we return an image in our image format CxHxW
 
     def update(self, event):
         if event['event_type'] == 'Click':
@@ -427,9 +440,9 @@ class Image(Post):
             self.img = img
         else:
             if img.ndim == 2:
-                self.img = cv2.resize(img, (int(scale * img.shape[0]), int(scale * np.squeeze(img).shape[1])))
+                self.img = cv2.resize(img, (int(scale * img.shape[-1]), int(scale * np.squeeze(img).shape[-2])))
             else:
-                self.img = np.swapaxes(cv2.resize(np.swapaxes(img, 0, 2), (int(scale * img.shape[1]), int(scale * np.squeeze(img).shape[2]))), 0, 2)
+                self.img = np.rollaxis(cv2.resize(np.rollaxis(img, 0, 3), (int(scale * img.shape[-1]), int(scale * np.squeeze(img).shape[-2]))), 2)
 
     def post(self):
         if self.board is None or self.img.size == 0:
@@ -817,11 +830,11 @@ class Bulletin():
                                         board=self.vis)
         return self.Posts[id]
 
-    def create_image_attention(self, id, image, attention, scale=1.0, focus=(0, 0)):
+    def create_image_attention(self, id, image, attention, scale=1.0, focus=(0, 0), alpha=0.5, increase_contrast=False):
         if id in self.Posts.keys():
             self.vis.clear_event_handlers(self.Posts[id].win)
 
-        self.Posts[id] = ImageAttentionMap(id, image, attention, focus=focus, scale=scale, board=self.vis)
+        self.Posts[id] = ImageAttentionMap(id, image, attention, focus=focus, scale=scale, board=self.vis, alpha=alpha, increase_contrast=increase_contrast)
         return self.Posts[id]
 
     def CreateImage(self, id, image, scale=1.0):
